@@ -1,0 +1,48 @@
+name: Test with mocked joke API
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake curl
+        run: |
+          mkdir -p /tmp/fakebin
+          REAL_CURL="$(command -v curl || echo /usr/bin/curl)"
+          cat > /tmp/fakebin/curl <<EOF
+          #!/bin/sh
+          out=""
+          prev=""
+          for arg in "\$@"; do
+            case "\$prev" in
+              -o|--output) out="\$arg" ;;
+            esac
+            prev="\$arg"
+          done
+          case "\$*" in
+            *icanhazdadjoke*)
+              if [ -n "\$out" ]; then
+                printf '%s' "I used to hate facial hair, but then it grew on me." > "\$out"
+              else
+                printf '%s' "I used to hate facial hair, but then it grew on me."
+              fi
+              exit 0
+              ;;
+          esac
+          exec $REAL_CURL "\$@"
+          EOF
+          chmod +x /tmp/fakebin/curl
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+      - name: Assert dad-joke output equals mocked joke
+        env:
+          ACTUAL: ${{ steps.action.outputs.dad-joke }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ "$ACTUAL" != "I used to hate facial hair, but then it grew on me." ]; then
+            echo "FAIL: expected the mocked joke"
+            exit 1
+          fi
+          echo "PASS"
